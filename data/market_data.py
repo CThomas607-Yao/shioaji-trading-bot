@@ -53,10 +53,20 @@ class MarketDataManager:
             current_kbar['volume'] += volume
 
     def on_bidask_stk(self, exchange: sj.Exchange, bidask: sj.BidAskSTKv1):
-        """處理最佳五檔 (暫時只印出最佳買賣價)"""
+        """處理最佳五檔並寫入資料庫"""
         best_bid = bidask.bid_price[0] if bidask.bid_price else None
         best_ask = bidask.ask_price[0] if bidask.ask_price else None
-        # print(f"[BidAsk] {bidask.code} | 買一: {best_bid} | 賣一: {best_ask}")
+        
+        # 印出至終端機監控
+        print(f"[BidAsk] {bidask.code} | 買一: {best_bid} | 賣一: {best_ask}")
+        
+        # 寫入資料庫
+        self.db.add_bidask(
+            code=bidask.code, 
+            ts=bidask.datetime, 
+            best_bid=best_bid, 
+            best_ask=best_ask
+        )
 
     def save_to_database(self, code, kbar):
         """正式寫入 SQLite 資料庫"""
