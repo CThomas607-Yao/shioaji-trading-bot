@@ -1,0 +1,10 @@
+# 環境變數與機密金鑰 
+.env
+
+# 本地資料庫檔案
+*.db
+*.sqlite3
+
+# Python 產生的暫存檔
+__pycache__/
+*.pyc
