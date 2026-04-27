@@ -7,9 +7,13 @@ class MarketDataManager:
         self.kbars = {}
         self.api.quote.set_on_tick_stk_v1_callback(self.on_tick_stk)
         
-        # 綁定 Callback (包含 Tick 與 BidAsk)
+        # 現貨 (STK) Callback
         self.api.quote.set_on_tick_stk_v1_callback(self.on_tick_stk)
         self.api.quote.set_on_bidask_stk_v1_callback(self.on_bidask_stk)
+
+        # 期貨 (FUT) Callback
+        self.api.quote.set_on_tick_fop_v1_callback(self.on_tick_fop)
+        self.api.quote.set_on_bidask_fop_v1_callback(self.on_bidask_fop)
 
     def subscribe_data(self, contract, quote_type="tick"):
         if not contract:
@@ -32,13 +36,34 @@ class MarketDataManager:
             version=sj.constant.QuoteVersion.v1
         )
 
+    # ==========================================
+    # 現貨 (Stock)
+    # ==========================================
     def on_tick_stk(self, exchange: sj.Exchange, tick: sj.TickSTKv1):
-        code = tick.code
-        price = float(tick.close)
-        volume = tick.volume
-        tick_time = tick.datetime.replace(second=0, microsecond=0)
+        self._process_tick(tick.code, float(tick.close), tick.volume, tick.datetime)
 
-        if code not in self.kbars: self.kbars[code] = None
+    def on_bidask_stk(self, exchange: sj.Exchange, bidask: sj.BidAskSTKv1):
+        self._process_bidask(bidask.code, bidask.datetime, bidask.bid_price, bidask.ask_price)
+
+    # ==========================================
+    # 期貨 (Future)
+    # ==========================================
+    def on_tick_fop(self, exchange: sj.Exchange, tick: sj.TickFOPv1):
+        self._process_tick(tick.code, float(tick.close), tick.volume, tick.datetime)
+
+    def on_bidask_fop(self, exchange: sj.Exchange, bidask: sj.BidAskFOPv1):
+        self._process_bidask(bidask.code, bidask.datetime, bidask.bid_price, bidask.ask_price)
+
+    # ==========================================
+    # 共用核心模組 (將重複邏輯抽離，方便維護)
+    # ==========================================
+    def _process_tick(self, code, price, volume, dt):
+        """將收到的即時 Tick 動態組裝成 1 分鐘 KBar"""
+        tick_time = dt.replace(second=0, microsecond=0)
+
+        if code not in self.kbars: 
+            self.kbars[code] = None
+            
         current_kbar = self.kbars[code]
 
         if current_kbar is None or current_kbar['time'] != tick_time:
@@ -52,23 +77,20 @@ class MarketDataManager:
             current_kbar['close'] = price
             current_kbar['volume'] += volume
 
-    def on_bidask_stk(self, exchange: sj.Exchange, bidask: sj.BidAskSTKv1):
+    def _process_bidask(self, code, dt, bid_price_list, ask_price_list):
         """處理最佳五檔並寫入資料庫"""
-        best_bid = bidask.bid_price[0] if bidask.bid_price else None
-        best_ask = bidask.ask_price[0] if bidask.ask_price else None
+        best_bid = bid_price_list[0] if bid_price_list else None
+        best_ask = ask_price_list[0] if ask_price_list else None
         
-        # 印出至終端機監控
-        print(f"[BidAsk] {bidask.code} | 買一: {best_bid} | 賣一: {best_ask}")
+        print(f"[BidAsk] {code} | 買一: {best_bid} | 賣一: {best_ask}")
         
-        # 寫入資料庫
         self.db.add_bidask(
-            code=bidask.code, 
-            ts=bidask.datetime, 
+            code=code, 
+            ts=dt, 
             best_bid=best_bid, 
             best_ask=best_ask
         )
 
     def save_to_database(self, code, kbar):
-        """正式寫入 SQLite 資料庫"""
         print(f"📝 正在存入資料庫: {code} @ {kbar['time']}")
         self.db.add_kbar(code, kbar)

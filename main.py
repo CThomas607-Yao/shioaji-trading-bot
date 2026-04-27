@@ -8,15 +8,15 @@ from data.database import SjDatabase
 # ==========================================
 # 系統運行控制面板 (Control Panel)
 # ==========================================
-TARGET_CODE = "1303"                                      # 在這裡更換您想監控/下載的標的 (例如 "2330", "1303")
-TARGET_DATE = "2026-04-22"                                # 歷史資料的目標日期 (可改為 datetime.today().strftime('%Y-%m-%d'))
-# TARGET_DATE = datetime.today().strftime('%Y-%m-%d')     
+TARGET_TYPE = "Future"                                    # 選擇標的類型: "Stock"/"Future"
+TARGET_CODE = "CAFR1"                                     # 個股：XXXX ；期貨連續合約： XXFR1(近月), XXFR2(遠月)
+TARGET_DATE = "2026-04-22"                                # 歷史資料的目標日期
 
 CONFIG = {
-    "ENABLE_HIST_KBAR": True,       # 模式 1: 下載歷史 KBar ----> db:kbars_1min
-    "ENABLE_HIST_TICK": True,       # 模式 2: 下載歷史 Tick ----> db:historical_ticks
-    "ENABLE_STREAM_TICK": True,    # 模式 3: 訂閱即時行情 Tick (用來動態組 KBar)
-    "ENABLE_STREAM_BIDASK": True,  # 模式 4: 訂閱即時五檔 BidAsk
+    "ENABLE_HIST_KBAR": True,       # 模式 1: 下載歷史 KBar (資料預熱)
+    "ENABLE_HIST_TICK": True,       # 模式 2: 下載歷史 Tick
+    "ENABLE_STREAM_TICK": True,     # 模式 3: 訂閱即時行情 Tick
+    "ENABLE_STREAM_BIDASK": True,   # 模式 4: 訂閱即時五檔 BidAsk
 }
 
 def main():
@@ -24,22 +24,33 @@ def main():
     client.login(fetch_contract=True)
     db = SjDatabase("market_data.db")
     
-    contract = client.api.Contracts.Stocks[TARGET_CODE]
+    # ---------------------------------------------------------
+    # 【合約類型：Stock/Future】與【標的代碼】設定
+    # ---------------------------------------------------------
+    contract = None
+    if TARGET_TYPE == "Stock":
+        contract = client.api.Contracts.Stocks[TARGET_CODE]
+    elif TARGET_TYPE == "Future":
+        symbol = TARGET_CODE[:3]  # 擷取前三碼 (如 TXF)
+        try:
+            contract = client.api.Contracts.Futures[symbol][TARGET_CODE]
+        except KeyError:
+            print(f"⚠️ 無法在 {symbol} 類別下找到期貨合約 {TARGET_CODE}")
+
     if not contract:
         print(f"⚠️ 無法取得標的 {TARGET_CODE} 的合約資訊，系統退出。")
         return
 
     # ---------------------------------------------------------
-    # 【階段一：歷史資料獲取 (Data Warm-up)】
+    # 【階段一：歷史資料獲取 (Data Warm-up)】(期貨現貨皆通用)
     # ---------------------------------------------------------
     h_manager = HistoryDataManager(client.api)
     
     if CONFIG["ENABLE_HIST_KBAR"]:
-        print(f"\n>>> [啟動] 載入 {TARGET_CODE} 歷史 KBar...")
+        print(f"\n>>> [啟動] 載入 {TARGET_CODE} ({TARGET_TYPE}) 歷史 KBar...")
         df_kbar = h_manager.get_kbars(contract, TARGET_DATE, TARGET_DATE)
         if df_kbar is not None and not df_kbar.empty:
             print(f">>> 成功獲取 {len(df_kbar)} 筆 KBar，寫入資料庫...")
-            # 將 KBar 逐筆寫入資料庫 (會由 db.add_kbar 處理分類與更新)
             for _, row in df_kbar.iterrows():
                 kbar_dict = {
                     'time': row['ts'], 'open': row['Open'], 'high': row['High'],
@@ -52,7 +63,6 @@ def main():
         print(f"\n>>> [啟動] 載入 {TARGET_CODE} 歷史 Tick (含 BidAsk)...")
         df_tick = h_manager.get_ticks(contract, TARGET_DATE)
         if df_tick is not None and not df_tick.empty:
-            # 呼叫資料庫的批次寫入功能
             db.add_historical_ticks_batch(contract.code, df_tick)
             print(">>> 歷史 Tick 獲取並存檔完成！")
         else:
