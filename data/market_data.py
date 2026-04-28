@@ -79,8 +79,8 @@ class MarketDataManager:
 
     def _process_bidask(self, code, dt, bid_price_list, ask_price_list):
         """處理最佳五檔並寫入資料庫"""
-        best_bid = bid_price_list[0] if bid_price_list else None
-        best_ask = ask_price_list[0] if ask_price_list else None
+        best_bid = float(bid_price_list[0]) if bid_price_list else None
+        best_ask = float(ask_price_list[0]) if ask_price_list else None
         
         print(f"[BidAsk] {code} | 買一: {best_bid} | 賣一: {best_ask}")
         
