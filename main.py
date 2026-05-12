@@ -1,4 +1,5 @@
 # main.py
+import datetime
 import time
 from core.sj_client import SjClient
 from data.database import SjDatabase
@@ -15,20 +16,20 @@ TARGETS = [
     {"type": "Future", "code": "QSFR1"}
 ]
 
-START_DATE = "2026-04-22"
-END_DATE = "2026-04-28"
+START_DATE = datetime.datetime.now().strftime("%Y-%m-%d")
+END_DATE = datetime.datetime.now().strftime("%Y-%m-%d")
 
 CONFIG = {
     "RUN_MARKET_VOLUME_SCAN": True,      
     "RUN_MARKET_PRICE_SCAN": True,       
     "RUN_MARKET_AMOUNT_SCAN": True,      
-    "RUN_MARKET_ATTENTION_SCAN": False,
+    "RUN_MARKET_ATTENTION_SCAN": True,
 
     "ENABLE_HIST_KBAR": True,     
     "ENABLE_HIST_TICK": True, 
 
-    "ENABLE_STREAM_TICK": False,   
-    "ENABLE_STREAM_BIDASK": False, 
+    "ENABLE_STREAM_TICK": True,   
+    "ENABLE_STREAM_BIDASK": True, 
 }
 
 def main():
@@ -61,7 +62,7 @@ def main():
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\n👋 收到終止訊號，系統安全關閉。")
+            print("\n>> 收到終止訊號，系統安全關閉 <<")
 
 if __name__ == "__main__":
     main()
